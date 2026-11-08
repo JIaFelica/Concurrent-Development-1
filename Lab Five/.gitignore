@@ -1,0 +1,10 @@
+# Compiled C++ binary (Linux / WSL build output)
+dinPhil
+
+# Compiled Go binary (Windows)
+dinPhil_go.exe
+
+# Any other executables or object files
+*.exe
+*.o
+*.out

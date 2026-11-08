@@ -1,0 +1,153 @@
+Lab Five: Dining Philosophers Problem
+=====================================
+
+Module: Concurrent and Distributed Systems - Lab Five
+Student:Xinyu  Jia 
+
+
+1. Project Licence
+------------------
+GNU General Public License v3.0 (GPL-3.0).
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+The full licence notice is also present in the header of every source
+file, and the licence terms are in the LICENSE file in this repository.
+
+
+2. Authors of Project
+---------------------
+- Dr. Joseph Kehoe  : original C++ and Go template code
+- Jia Xinyu         : Semaphore implementation, deadlock solution,
+                      Go channel solution, README and licence information
+
+
+3. How to Install and Run
+-------------------------
+No installation step is required: the project is plain source code that
+is compiled directly.
+
+C++ version (Linux, WSL, or any POSIX system):
+    cd <the folder containing this project>
+    g++ main.cpp Semaphore.cpp -o dinPhil -std=c++11 -pthread
+    ./dinPhil
+    (stop with Ctrl+C)
+
+  On Windows the same command works in PowerShell as long as g++ is
+  installed, because the code no longer depends on <unistd.h>.
+
+Go version:
+    cd <the folder containing this project>
+    go run dinPhil.go
+    (stop with Ctrl+C)
+
+
+4. Required Libraries and Platform Issues
+-----------------------------------------
+C++: C++11 or later, plus the pthread library (-pthread).
+     Developed and tested on Ubuntu 24.04 running under WSL2 on Windows 11
+     with g++ 15. No third-party libraries are used.
+
+Go:  Go 1.22 or later. The code uses math/rand/v2 and the new
+     "range over an integer" form, both of which require Go 1.22+.
+
+Platform issues encountered and resolved:
+  a) std::vector<Semaphore> does not compile. Semaphore contains a
+     std::mutex and a std::condition_variable, which are non-copyable and
+     non-movable. std::vector requires a move constructor for reallocation
+     even when reserve() is called, so the container was changed to
+     std::deque, which never relocates existing elements.
+
+  b) Console output interleaved between threads (for example
+     "43 is chomping!" instead of two separate lines). A chain of <<
+     operations on std::cout is not atomic. A dedicated std::mutex
+     (print_mutex) now protects each print statement.
+
+  c) The original code used <unistd.h> and sleep(), which are POSIX only.
+     Replaced with std::this_thread::sleep_for so the C++ version builds
+     unchanged on Windows, Linux and macOS.
+
+
+5. TO DO / Known Issues
+-----------------------
+Completed from the original template's MISSING list:
+  [x] README written
+  [x] Full licence information added (file headers + LICENSE file)
+  [x] Comments added to all functions
+  [x] Deadlock removed (odd-even fork acquisition strategy)
+
+Remaining limitations (not required by the lab):
+  - Both versions run forever by design; they are stopped with Ctrl+C.
+  - No controlled shutdown / signal handling is implemented.
+  - The number of philosophers is a compile-time constant (5) and the
+    fork index geometry (index, index+1) assumes a ring of 5.
+  - The C++ version has not been extended to log timestamps or to
+    produce statistics; the console output is the only evidence.
+  - In the Go version the random duration is rand.IntN(5), which can
+    return 0, so a philosopher may occasionally think or eat for zero
+    seconds and appear to act twice in a row. This comes from the original
+    template and does not affect correctness.
+
+
+6. List of Files and What They Contain
+--------------------------------------
+LICENSE          - GNU GPL v3 licence terms for this project.
+README           - This file.
+.gitignore       - Excludes compiled binaries from version control.
+Semaphore.h      - Declaration of the Semaphore class. Contains the
+                   templated Wait(timeout) member function, which has to be
+                   defined in the header because C++ template member
+                   functions cannot be compiled from a .cpp file.
+Semaphore.cpp    - Implementation of Semaphore::Wait() (P operation) and
+                   Semaphore::Signal() (V operation), built on std::mutex
+                   and std::condition_variable.
+main.cpp         - The C++ Dining Philosophers program. Creates five
+                   philosopher threads, gives each fork a binary semaphore
+                   initialised to 1, and uses the odd-even strategy to
+                   acquire forks.
+dinPhil.go       - The Go Dining Philosophers program. Each fork is a
+                   buffered channel of capacity 1, used as a binary
+                   semaphore; the same odd-even strategy prevents deadlock.
+
+
+7. Any Other Relevant Information
+---------------------------------
+The problem
+  Five philosophers sit around a circular table with five forks. Each
+  philosopher alternates between thinking and eating, and needs both the
+  fork to their left and the fork to their right in order to eat.
+
+The naive solution and its failure
+  If every philosopher picks up the left fork first and then the right
+  fork, all five can hold one fork at the same time and then wait forever
+  for the second one. This is a deadlock: the four Coffman conditions
+  (mutual exclusion, hold and wait, no preemption, circular wait) are all
+  satisfied.
+
+The solution used here (odd-even strategy)
+  Odd-numbered philosophers take the left fork first, even-numbered
+  philosophers take the right fork first. This removes the circular wait
+  condition, so deadlock is impossible while mutual exclusion is still
+  guaranteed.
+
+Observed behaviour
+  Both programs run indefinitely with all five philosophers cycling
+  through think -> eat -> think. No deadlock occurs and no philosopher
+  starves. Output of the C++ version was inspected line by line: no two
+  philosophers ever hold the same fork at the same time.
+
+Alternative solutions that could be used
+  - Limit the number of philosophers allowed to pick up forks at once to
+    four, so at least one can always get both.
+  - Use a timeout on the second Wait() and release the first fork on
+    failure (already supported by Semaphore::Wait(duration)).
+  - Introduce a single arbitrator semaphore around the whole table
+    (correct but reduces concurrency to one eater at a time).
