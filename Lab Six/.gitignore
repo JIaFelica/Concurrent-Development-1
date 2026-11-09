@@ -1,0 +1,5 @@
+# build output
+lab_safebuffer
+*.o
+*.out
+*.exe

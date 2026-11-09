@@ -1,0 +1,129 @@
+SafeBuffer and Event
+====================
+
+Module: Concurrent and Distributed Systems
+Student: Jia Xinyu
+
+
+1. Licence
+----------
+GNU General Public License v3.0. The full terms are in the LICENSE file
+in this folder, and a short notice is at the top of every source file.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+
+2. Authors
+----------
+- Dr. Joseph Kehoe : original Semaphore, Event.h and SafeBuffer.h templates
+- Jia Xinyu       : Semaphore fix, Event and SafeBuffer implementations,
+                    producer/consumer program and this README
+
+
+3. How to Install and Run
+-------------------------
+Nothing has to be installed, the program is built straight from source.
+
+    cd <the folder containing this project>
+    g++ main.cpp Semaphore.cpp -o lab_safebuffer -std=c++11 -pthread
+    ./lab_safebuffer
+
+The program stops by itself after all items have been moved and prints
+PASS or FAIL as its result. It takes about one second.
+
+
+4. Required Libraries and Platform Issues
+-----------------------------------------
+C++11 and the pthread library (-pthread). Nothing else is used.
+
+Tested on Ubuntu 24.04 (WSL2 on Windows 11) with g++ 15. The sources use
+only <thread>, <mutex>, <condition_variable>, <chrono> and the standard
+containers, so they also build on Linux, macOS and Windows.
+
+Things that caused problems:
+ - Template member functions must be defined in the header. The timed
+   Wait() in Semaphore is therefore written inline in Semaphore.h; when
+   it sat in Semaphore.cpp the timed overload would not link.
+ - Semaphore holds a std::mutex and a std::condition_variable, so it can
+   not be copied or moved. That is why SafeBuffer is created once in
+   main.cpp and shared by the threads instead of being passed by value.
+ - Event and SafeBuffer are written inside their headers so the build
+   stays at two .cpp files.
+
+
+5. TO DO / Known Issues
+-----------------------
+Done:
+ [x] Semaphore usable from more than one file (timed Wait moved to the header)
+ [x] Event implemented (Wait, Signal, Reset)
+ [x] SafeBuffer implemented (bounded buffer, blocks when full or empty)
+ [x] main.cpp rewritten to use SafeBuffer and Event
+ [x] program checks its own result and prints PASS or FAIL
+ [x] README and licence
+
+Not done:
+ - SafeBuffer only stores ints.
+ - There is no Remove(timeout), so a consumer blocked on an empty buffer
+   can not be cancelled.
+ - The number of threads and items is fixed at compile time.
+ - The "(buffer x/5)" value is read just after the operation while other
+   threads are still running, so it can skip a value. This is expected.
+
+
+6. Files
+--------
+LICENSE       - GPL v3 terms.
+README        - this file.
+Semaphore.h   - Semaphore class, with the timed Wait() inline in the header.
+Semaphore.cpp - Semaphore::Wait() and Semaphore::Signal().
+Event.h       - Event: Wait() blocks, Signal() sets the flag and wakes every
+                waiting thread, Reset() clears it.
+SafeBuffer.h  - SafeBuffer: bounded buffer of ints with Add(), Remove(),
+                Count() and Capacity().
+main.cpp      - three producers and two consumers around one SafeBuffer.
+
+
+7. Other Information
+--------------------
+How SafeBuffer works
+  Three semaphores are used:
+    m_spaces - number of free slots, starts at the buffer size
+    m_items  - number of stored items, starts at 0
+    m_mutex  - starts at 1, so only one thread is inside at a time
+  Add() waits for a free slot, takes m_mutex, writes the item and moves
+  the write index, releases m_mutex, then signals that an item is ready.
+  Remove() does the opposite: it waits for an item, takes m_mutex, reads
+  the item and moves the read index, releases m_mutex, then signals that
+  a slot is free.
+  The waits on m_spaces and m_items are outside m_mutex on purpose. If a
+  thread held m_mutex while waiting, a full buffer would deadlock, because
+  the consumers could never get in to empty it.
+
+How Event works
+  A bool plus a condition variable. Signal() sets the flag and calls
+  notify_all(), and the flag stays set, so every thread that is already
+  waiting continues and later callers do not block. Reset() clears the
+  flag again. In this program the event is used as a start gate: all
+  threads are created first, they all stop at startEvent.Wait(), and then
+  main releases them together.
+
+What the run shows
+  Producers are faster than consumers, so the buffer reaches 5/5 and the
+  producers have to wait for free slots. At the end the consumers take
+  the last items out and the buffer goes back to 0/5.
+  Every item is numbered with its producer id, so the sum of everything
+  produced must equal the sum of everything consumed. The program
+  compares the two sums and the final buffer size, then prints PASS.
+  A normal run produces and consumes 12 items with a sum of 2418.
+
+Testing further
+  Change ITEMS_PER_PRODUCER, ITEMS_PER_CONSUMER or the thread counts at
+  the top of main.cpp and run again. The PASS line still checks that the
+  two sums are equal and that the buffer ends up empty.
